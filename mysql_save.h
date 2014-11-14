@@ -6,6 +6,6 @@
 #define USER "root"
 #define PASSWD "111"
 
-void save_action_data(struct action_data *data);
+void save_action_data(struct data_list_head *data);
 void save_stream_data(struct stream_data *data);
 #endif /*__MYSQL_CONN_H__*/

@@ -17,6 +17,10 @@
 #include <signal.h>
 #include<sys/types.h>
 #include<sys/stat.h>
+struct data_list_head {
+	int data_count;
+	struct action_data *head;
+};
 
 struct action_data {
 	char server_code[15];
@@ -24,6 +28,7 @@ struct action_data {
         char login_time[15];
         char logout_time[15];
 	char cur_time[13];
+	struct action_data * next;
 };
 
 struct stream_data {

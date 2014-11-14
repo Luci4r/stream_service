@@ -1,14 +1,5 @@
 #include "global.h"
 #include "mysql_save.h"
-struct data_list{
-	char *data;
-	struct data_list *next;
-};
-
-struct data_list_head {
-	int data_count;
-	struct data_list *head;
-};
 
 int Debug = 0;
 
@@ -74,41 +65,39 @@ err:
 	exit(1);
 }
 
-void decode_data_action(struct data_list_head *list_head)
+struct action_data *decode_data_action(char *buf)
 {
-	struct data_list *data = NULL;
 	time_t cur_tm;
 	struct action_data *decode_data;
 	struct tm *s_time;
-	int data_count = 0;
+	char *p = NULL;
+	char *q = NULL;
 	time(&cur_tm);
 	s_time = localtime(&cur_tm);
 	decode_data = (struct action_data *)malloc(sizeof(struct action_data));
-	memset(decode_data, 0, sizeof(struct action_data));
-	char *p = NULL;
-	char *q = NULL;
-	data_count = list_head->data_count;
-	data = list_head->head;
-	while(data_count > 0) {
-		DPRINTF("action data is %s\n", data->data);
-		p = strchr(data->data + 4, '+');
-		q = strchr(p + 1, '+');
-		snprintf(decode_data->server_code, q - p,  "%s", p + 1);
-		p = strchr(q + 1, '+');
-		snprintf(decode_data->mobile_code, p - q, "%s", q + 1);
-		q = strchr(p + 1, '+');
-		snprintf(decode_data->login_time, q - p, "%s", p + 1);
-		p = strchr(q + 1, '=');
-		snprintf(decode_data->logout_time, p - q, "%s", q + 1);
-		snprintf(decode_data->cur_time, 13, "%04d%02d%02d%02d%02d", s_time->tm_year + 1900, s_time->tm_mon + 1, s_time->tm_mday, s_time->tm_hour,s_time->tm_min);
-		save_action_data(decode_data);
-		data_count--;
-		data = data->next;
-		memset(decode_data, 0, sizeof(struct action_data));
-		if(data == NULL)
-			break;
+	if(decode_data == NULL) {
+		DPRINTF("data malloc error\n");
+		return NULL;
 	}
-	free(decode_data);
+	memset(decode_data, 0, sizeof(struct action_data));
+	/* TODO: add range judgement
+	p = strchr(buf, '+');
+	data_len = atoi(p);
+	if(data_len >100 || data_len < 0) {
+		DPRINTF("data len error %d\n", data_len);
+		return NULL;
+	}*/
+	p = strchr(buf + 4, '+');
+	q = strchr(p + 1, '+');
+	snprintf(decode_data->server_code, q - p,  "%s", p + 1);
+	p = strchr(q + 1, '+');
+	snprintf(decode_data->mobile_code, p - q, "%s", q + 1);
+	q = strchr(p + 1, '+');
+	snprintf(decode_data->login_time, q - p, "%s", p + 1);
+	p = strchr(q + 1, '=');
+	snprintf(decode_data->logout_time, p - q, "%s", q + 1);
+	snprintf(decode_data->cur_time, 13, "%04d%02d%02d%02d%02d", s_time->tm_year + 1900, s_time->tm_mon + 1, s_time->tm_mday, s_time->tm_hour,s_time->tm_min);
+	return decode_data;
 }
 
 void decode_data_bytes(char *data)
@@ -135,97 +124,143 @@ void decode_data_bytes(char *data)
 	free(stream_data);
 }
 
+int data_rec(int sock, char *buf)
+{
+	int new_sock = sock;
+	int num_rev = -1;
+	num_rev = recv(new_sock, buf, sizeof(buf), 0);
+	if(num_rev == 0) {
+		DPRINTF("connection is closed by client\n");
+		return -1;
+	} else if(num_rev < 0) {
+		DPRINTF("error while receive message\n");
+		return -2;
+	}
+	return num_rev;
+}
+int judge_data_type(char *buf, int num_recv)
+{
+	if(num_recv < 7) {
+		DPRINTF("data formate error\n");
+		return -1;
+	}
+	if(strncmp(buf, "=nsx", 4) == 0) {
+		DPRINTF("received data is %s action data head.\n", buf);
+		return 1;
+	} else if(strncmp(buf, "=sx", 3) == 0) {
+		DPRINTF("received stream data %s\n", buf);
+		return 2;
+	} else if(strncmp(buf, "=ll", 3) == 0) {
+		DPRINTF("received net data stream%s\n", buf);
+		return 3;
+	} else if(strncmp(buf, "over", 4) == 0) {
+		DPRINTF("received over signal\n");
+		return 100;
+	} else {
+		DPRINTF("other data stream %s\n", buf);
+		return 4;
+	}
+	return -1;
+}
 void *handler_connetcion(void *arg)
 {
-	struct data_list_head *head;
-	struct data_list *cur;
+	struct data_list_head *head = NULL;
+	struct action_data *cur = NULL;
 	char buf[100] = {0};
-	char *data = NULL;
 	char *p = NULL;
-	int len = 0;
 	int new_sock;
 	int num_rev = 0;
-	int flag = 0;
 	int num_count = -1;
 	new_sock = (int)arg;
 	while(1) {
-		if((num_rev = recv(new_sock, buf, sizeof(buf), 0)) < 0) {
-			DPRINTF("error while receive message\n");
-			pthread_exit(0);
-		} else if(num_rev == 0) {
-			DPRINTF("connection is closed by client\n");
+		memset(buf, 0, sizeof(buf));
+		if((num_rev = data_rec(new_sock, buf)) < 0) {
+			//TODO: error handler
+			if(head != NULL) {
+				save_action_data(head);
+				DPRINTF("data saved number is %d", head->data_count - num_count);
+				while(head->head != NULL) {
+					cur = head->head;
+					head->head = cur->next;
+					free(cur);
+				}
+				free(head);
+				head = NULL;
+			}
+			close(new_sock);
+			DPRINTF("thread exit %d\n", (int)pthread_self());
 			pthread_exit(0);
 		}
-		if(num_count == -1) {
-			if(num_rev < 7) {
-				DPRINTF("data formate error\n");
-				pthread_exit(0);
-			}
-			if(strncmp(buf, "=nsx", 4) == 0) {
-				DPRINTF("received data is %s action data head.\n", buf);
+		switch(judge_data_type(buf, num_rev)) {
+			//1:nsx 2:sx 3:ll 100:over -1:other
+			case 1:
 				p = strchr(buf, '+');
 				num_count = atoi(p);
 				head = (struct data_list_head *)malloc(sizeof(struct data_list_head));
 				head->data_count = num_count;
 				head->head = NULL;
 				send(new_sock, "ready", 5, 0);
-				continue;
-			}
-			if(strncmp(buf, "=ll", 3) == 0) {
-				DPRINTF("received data is %s stream data head.\n", buf);
+				break;
+			case 2:
+				if(num_count == -1)
+					break;
+				cur = decode_data_action(buf);
+				if(cur == NULL) {
+					DPRINTF("one error data stream\n");
+					head->data_count--;
+				} else {
+					if(head->head == NULL) {
+						head->head = cur;
+						cur->next = NULL;
+					} else {
+						cur->next = head->head;
+						head->head = cur;
+					}
+				}
+				num_count--;
+				send(new_sock, "ok", 2, 0);
+				if(num_count == 0) {
+					save_action_data(head);
+					DPRINTF("data saved number is %d", head->data_count - num_count);
+					while(head->head != NULL) {
+						cur = head->head;
+						head->head = cur->next;
+						free(cur);
+					}
+					free(head);
+					head = NULL;
+					num_count = -1;
+				}
+				break;
+			case 3:
 				decode_data_bytes(buf + 3);
 				send(new_sock, "ok", 2, 0);
 				break;
-			}
-			DPRINTF("data formate error\n");
-		}
-		if(flag == 0) {
-			if(buf[0] != '=' && num_rev < 10) {
-				DPRINTF("data formate error\n");
+			case 100:
+				if(head != NULL) {
+					save_action_data(head);
+					DPRINTF("data saved number is %d", head->data_count - num_count);
+					while(head->head != NULL) {
+						cur = head->head;
+						head->head = cur->next;
+						free(cur);
+					}
+					free(head);
+					head = NULL;
+				}
+				send(new_sock, "ok", 2, 0);
+				close(new_sock);
+				DPRINTF("thread exit %d\n", (int)pthread_self());
 				pthread_exit(0);
-			}
-			p = strchr(buf, '+');
-			//snprintf(len, q-p, "%d", p+1);
-			len = atoi(p);
-			data = (char *)malloc(len+1);
-			memset(data, 0, len+1);
-		}
-		strncat(data, buf, num_rev);
-		if(num_rev < len) {
-			flag = 1;
-			len = len - num_rev;
-			memset(buf, 0, sizeof(buf));
-			continue;
-		}
-		
-		cur = (struct data_list*)malloc(sizeof(struct data_list));
-		cur->data = data;
-		if(head->head == NULL) {
-			head->head = cur;
-			cur->next = NULL;
-		} else {
-			cur->next = head->head;
-			head->head = cur;
-		}
-		DPRINTF("receive data is %s\n", cur->data);
-		num_count--;
-		flag = 0;
-
-		send(new_sock, "ok", 2, 0);
-		if(num_count == 0) {
-			decode_data_action(head);
-			while(head->head != NULL){
-				cur = head->head;
-				head->head = cur->next;
-				free(cur);
-			}
-			free(head);
-			break;
+				break;
+			case -1:
+				//TODO:data formate error handler
+				break;
+			default:
+				//TODO:other data formate handler
+				break;
 		}
 	}
-	close(new_sock);
-	DPRINTF("thread exit %d\n", (int)pthread_self());
-	pthread_exit(0);
 }
 
 int main(int argc,char **argv)
