@@ -2,7 +2,7 @@
 #include "mysql_save.h"
 
 int Debug = 0;
-
+#define BUFLEN 100
 void daemonize(const char *cmd)
 {
 	int i, fd0, fd1, fd2;
@@ -128,7 +128,7 @@ int data_rec(int sock, char *buf)
 {
 	int new_sock = sock;
 	int num_rev = -1;
-	num_rev = recv(new_sock, buf, sizeof(buf), 0);
+	num_rev = recv(new_sock, buf, BUFLEN, 0);
 	if(num_rev == 0) {
 		DPRINTF("connection is closed by client\n");
 		return -1;
@@ -140,7 +140,7 @@ int data_rec(int sock, char *buf)
 }
 int judge_data_type(char *buf, int num_recv)
 {
-	if(num_recv < 7) {
+	if(num_recv < 4) {
 		DPRINTF("data formate error\n");
 		return -1;
 	}
@@ -166,19 +166,19 @@ void *handler_connetcion(void *arg)
 {
 	struct data_list_head *head = NULL;
 	struct action_data *cur = NULL;
-	char buf[100] = {0};
+	char buf[BUFLEN] = {0};
 	char *p = NULL;
 	int new_sock;
 	int num_rev = 0;
 	int num_count = -1;
 	new_sock = (int)arg;
 	while(1) {
-		memset(buf, 0, sizeof(buf));
+		memset(buf, 0, BUFLEN);
 		if((num_rev = data_rec(new_sock, buf)) < 0) {
 			//TODO: error handler
 			if(head != NULL) {
 				save_action_data(head);
-				DPRINTF("data saved number is %d", head->data_count - num_count);
+				DPRINTF("data saved number is %d\n", head->data_count - num_count);
 				while(head->head != NULL) {
 					cur = head->head;
 					head->head = cur->next;
@@ -221,7 +221,7 @@ void *handler_connetcion(void *arg)
 				send(new_sock, "ok", 2, 0);
 				if(num_count == 0) {
 					save_action_data(head);
-					DPRINTF("data saved number is %d", head->data_count - num_count);
+					DPRINTF("data saved number is %d\n", head->data_count - num_count);
 					while(head->head != NULL) {
 						cur = head->head;
 						head->head = cur->next;
@@ -239,7 +239,7 @@ void *handler_connetcion(void *arg)
 			case 100:
 				if(head != NULL) {
 					save_action_data(head);
-					DPRINTF("data saved number is %d", head->data_count - num_count);
+					DPRINTF("data saved number is %d\n", head->data_count - num_count);
 					while(head->head != NULL) {
 						cur = head->head;
 						head->head = cur->next;
