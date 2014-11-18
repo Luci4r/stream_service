@@ -79,6 +79,7 @@ struct action_data *decode_data_action(char *buf)
 		DPRINTF("data malloc error\n");
 		return NULL;
 	}
+	DPRINTF("action data is %s\n", buf);
 	memset(decode_data, 0, sizeof(struct action_data));
 	/* TODO: add range judgement
 	p = strchr(buf, '+');
@@ -109,9 +110,7 @@ void decode_data_bytes(char *data)
 	s_time = localtime(&cur_tm);
 	stream_data = (struct stream_data *)malloc(sizeof(struct stream_data));
 	memset(stream_data, 0, sizeof(struct stream_data));
-#ifdef DEBUG
 	DPRINTF("bytes data is =ll%s\n", data);
-#endif
 	char *p = NULL;
 	char *q = NULL;
 	p = strchr(data, '+');
@@ -204,7 +203,9 @@ void *handler_connetcion(void *arg)
 				head = NULL;
 			}
 			close(new_sock);
+#ifdef DEBUG
 			DPRINTF("thread exit %d\n", (int)pthread_self());
+#endif
 			pthread_exit(0);
 		}
 		switch(judge_data_type(buf, num_rev)) {
@@ -272,7 +273,9 @@ void *handler_connetcion(void *arg)
 				}
 				send(new_sock, "ok", 2, 0);
 				close(new_sock);
+#ifdef DEBUG
 				DPRINTF("thread exit %d\n", (int)pthread_self());
+#endif
 				pthread_exit(0);
 				break;
 			case -1:
