@@ -109,7 +109,9 @@ void decode_data_bytes(char *data)
 	s_time = localtime(&cur_tm);
 	stream_data = (struct stream_data *)malloc(sizeof(struct stream_data));
 	memset(stream_data, 0, sizeof(struct stream_data));
+#ifdef DEBUG
 	DPRINTF("bytes data is =ll%s\n", data);
+#endif
 	char *p = NULL;
 	char *q = NULL;
 	p = strchr(data, '+');
@@ -141,23 +143,35 @@ int data_rec(int sock, char *buf)
 int judge_data_type(char *buf, int num_recv)
 {
 	if(num_recv < 4) {
+#ifdef DEBUG
 		DPRINTF("data formate error\n");
+#endif
 		return -1;
 	}
 	if(strncmp(buf, "=nsx", 4) == 0) {
+#ifdef DEBUG
 		DPRINTF("received data is %s action data head.\n", buf);
+#endif
 		return 1;
 	} else if(strncmp(buf, "=sx", 3) == 0) {
+#ifdef DEBUG
 		DPRINTF("received stream data %s\n", buf);
+#endif
 		return 2;
 	} else if(strncmp(buf, "=ll", 3) == 0) {
+#ifdef DEBUG
 		DPRINTF("received net data stream%s\n", buf);
+#endif
 		return 3;
 	} else if(strncmp(buf, "over", 4) == 0) {
+#ifdef DEBUG
 		DPRINTF("received over signal\n");
+#endif
 		return 100;
 	} else {
+#ifdef DEBUG
 		DPRINTF("other data stream %s\n", buf);
+#endif
 		return 4;
 	}
 	return -1;
@@ -178,7 +192,9 @@ void *handler_connetcion(void *arg)
 			//TODO: error handler
 			if(head != NULL) {
 				save_action_data(head);
+#ifdef DEBUG
 				DPRINTF("data saved number is %d\n", head->data_count - num_count);
+#endif
 				while(head->head != NULL) {
 					cur = head->head;
 					head->head = cur->next;
@@ -206,7 +222,9 @@ void *handler_connetcion(void *arg)
 					break;
 				cur = decode_data_action(buf);
 				if(cur == NULL) {
+#ifdef DEBUG
 					DPRINTF("one error data stream\n");
+#endif
 					head->data_count--;
 				} else {
 					if(head->head == NULL) {
@@ -221,7 +239,9 @@ void *handler_connetcion(void *arg)
 				send(new_sock, "ok", 2, 0);
 				if(num_count == 0) {
 					save_action_data(head);
+#ifdef DEBUG
 					DPRINTF("data saved number is %d\n", head->data_count - num_count);
+#endif
 					while(head->head != NULL) {
 						cur = head->head;
 						head->head = cur->next;
@@ -239,7 +259,9 @@ void *handler_connetcion(void *arg)
 			case 100:
 				if(head != NULL) {
 					save_action_data(head);
+#ifdef DEBUG
 					DPRINTF("data saved number is %d\n", head->data_count - num_count);
+#endif
 					while(head->head != NULL) {
 						cur = head->head;
 						head->head = cur->next;

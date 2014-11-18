@@ -32,7 +32,9 @@ void save_action_data(struct data_list_head *data)
 	data_count = data->data_count;
 	while(cur != NULL && data_count > 0) {
 		snprintf(sql_str, sizeof(sql_str), sql_fmt, cur->server_code, cur->mobile_code, cur->login_time, cur->logout_time, cur->cur_time);
+#ifdef DEBUG
 		DPRINTF("sql string is %s\n", sql_str);
+#endif
 		if(mysql_query(mysql, sql_str)) {
 			DPRINTF("error to query string\n");
 			continue;
@@ -59,7 +61,9 @@ void save_stream_data(struct stream_data *data)
 		return;
 	}
 	snprintf(sql_str, sizeof(sql_str), sql_fmt, data->server_code, data->RX_bytes, data->TX_bytes, data->cur_time);
+#ifdef DEBUG
 	DPRINTF("sql string is %s\n", sql_str);
+#endif
 	if(mysql_query(mysql, sql_str)) {
 		DPRINTF("error to query string\n");
 		return;

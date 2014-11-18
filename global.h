@@ -17,6 +17,7 @@
 #include <signal.h>
 #include<sys/types.h>
 #include<sys/stat.h>
+#define DEBUF 1
 struct data_list_head {
 	int data_count;
 	struct action_data *head;
