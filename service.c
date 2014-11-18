@@ -271,6 +271,9 @@ int main(int argc,char **argv)
 	socklen_t sin_size;
 	int thread_result;
 	char c;
+	int retry_time = 0;
+	pthread_t thr_rev;
+	pthread_attr_t child_thread_attr;
 	while ( (c = getopt(argc, argv, "d") ) != -1) {
 		switch (c) {
 			case 'd':
@@ -299,23 +302,28 @@ int main(int argc,char **argv)
 	}
 	DPRINTF("Start waiting...\n");
 	while(1) {
+		retry_time = 5;
 		sin_size = sizeof(struct sockaddr_in);
 		if((new_fd = accept(sockfd, (struct sockaddr *)&des_addr, &sin_size)) == -1) {
 			DPRINTF("error in accept connection\n");
 			//TODO> add error handle function here
 		}
 		//Create the thread method
-		pthread_t thr_rev;
-		pthread_attr_t child_thread_attr;
         	pthread_attr_init(&child_thread_attr);
 	        pthread_attr_setdetachstate(&child_thread_attr,PTHREAD_CREATE_DETACHED);
 		//Create new thread for handler connection
-		thread_result = pthread_create(&thr_rev, &child_thread_attr, handler_connetcion, (void *)new_fd);
-		if(thread_result != 0) {
-			DPRINTF("error while create new thread\n");
-			//TODO> add error handle function here
-		} else {
-			DPRINTF("start new thread %d\n", (int)thr_rev);
+		while(retry_time > 0) {
+			thread_result = pthread_create(&thr_rev, &child_thread_attr, handler_connetcion, (void *)new_fd);
+			if(thread_result != 0) {
+				DPRINTF("Error while create new thread.Try again\n");
+				retry_time--;
+				sleep(3);
+				continue;
+				//TODO> add error handle function here
+			} else {
+				break;
+				//DPRINTF("start new thread %d\n", (int)thr_rev);
+			}
 		}
 		
 	}
